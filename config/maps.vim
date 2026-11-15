@@ -27,8 +27,8 @@ nnoremap <leader>fg :Telescope live_grep<CR>
 nnoremap <leader>fb :Telescope buffers<CR>
 nnoremap <leader>fh :Telescope help_tags<CR>
 
-" TagbarToggle
-map <leader>t :TagbarToggle<CR>
+" TagbarToggle (;tt, not ;t, which would wait to see if ;tn follows)
+nnoremap <leader>tt :TagbarToggle<CR>
 
 inoremap jj <Esc>
 
@@ -70,6 +70,15 @@ end
 vim.api.nvim_set_hl(0, 'TermTab', { fg = '#888888', bg = '#1e1e1e' })
 vim.api.nvim_set_hl(0, 'TermTabActive', { fg = '#1e1e1e', bg = '#7dcfff', bold = true })
 
+-- Terminals are unlisted, so :bn/:bp (;] ;[), ;x and Telescope buffers only
+-- see files. The manager keeps track of them itself in `terminals`.
+local function open_terminal()
+  vim.cmd('terminal')
+  local buf = vim.api.nvim_get_current_buf()
+  vim.bo[buf].buflisted = false
+  return buf
+end
+
 function ToggleTerminal()
   if term_win and vim.api.nvim_win_is_valid(term_win) then
     -- Terminal is visible, hide it
@@ -89,8 +98,7 @@ function ToggleTerminal()
   if buf and vim.api.nvim_buf_is_valid(buf) then
     vim.api.nvim_win_set_buf(term_win, buf)
   else
-    vim.cmd('terminal')
-    terminals[current_term] = vim.api.nvim_get_current_buf()
+    terminals[current_term] = open_terminal()
   end
 
   vim.cmd('resize 15')
@@ -110,8 +118,7 @@ function SwitchTerminal(index)
   if buf and vim.api.nvim_buf_is_valid(buf) then
     vim.api.nvim_win_set_buf(term_win, buf)
   else
-    vim.cmd('terminal')
-    terminals[current_term] = vim.api.nvim_get_current_buf()
+    terminals[current_term] = open_terminal()
   end
 
   render_term_tabs()
@@ -134,8 +141,7 @@ end
 function NewTerminal()
   current_term = #terminals + 1
   if term_win and vim.api.nvim_win_is_valid(term_win) then
-    vim.cmd('terminal')
-    terminals[current_term] = vim.api.nvim_get_current_buf()
+    terminals[current_term] = open_terminal()
     render_term_tabs()
     vim.cmd('startinsert')
   else

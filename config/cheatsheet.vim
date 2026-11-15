@@ -17,7 +17,7 @@ local categories = {
       { key = ";d", desc = "Duplicate current line" },
       { key = "jj", desc = "Exit insert mode" },
       { key = ";n", desc = "Toggle NERDTree" },
-      { key = ";t", desc = "Toggle Tagbar" },
+      { key = ";tt", desc = "Toggle Tagbar" },
       { key = ";Enter", desc = "Toggle terminal (hide/show)" },
       { key = ";?", desc = "Open this cheatsheet" },
     },

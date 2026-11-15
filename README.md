@@ -65,7 +65,7 @@ Editing:
 
 Plugins:
 - `Ctrl-p` — Open CtrlP
-- `<leader>t` — Toggle Tagbar
+- `<leader>tt` — Toggle Tagbar
 - `<leader>n` — Toggle NERDTree (tab-aware)
 - `<leader>cc` — CopilotChat: open chat
 - `<leader>ce` — CopilotChat: explain
