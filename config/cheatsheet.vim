@@ -168,11 +168,10 @@ local categories = {
   {
     name = "Workspaces",
     keys = {
-      { key = ";ws", desc = "ntree: switch to a workspace (picker)" },
-      { key = ";wm", desc = "ntree: back to the main checkout" },
+      { key = ";ws", desc = "ntree: switch workspace (code, tree, open files, terminal)" },
+      { key = ";wm", desc = "ntree: switch back to the main checkout" },
       { key = ";wn", desc = "ntree: new workspace (+ description) and switch" },
       { key = ";wd", desc = "ntree: set/clear this workspace's description" },
-      { key = ";wt", desc = "ntree: list terminals with their workspace + description" },
     },
   },
   {

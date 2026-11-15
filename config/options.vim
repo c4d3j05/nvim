@@ -53,3 +53,6 @@ set nomodeline
 set spell
 set relativenumber
 
+" autoread only acts when nvim checks: do it when focus or the cursor comes back,
+" so edits made in a terminal or by an agent show up. Never overwrites unsaved changes.
+autocmd FocusGained,BufEnter,CursorHold * silent! checktime

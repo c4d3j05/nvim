@@ -64,7 +64,7 @@ local function render_term_tabs()
     end
   end
 
-  local winbar = "  Terminal: " .. tabs .. "%=;tn: new  ;1-5: switch  ;wt: list  ;Enter: hide "
+  local winbar = "  Terminal: " .. tabs .. "%=;tn: new  ;1-5: switch  ;Enter: hide "
   vim.api.nvim_win_set_option(term_win, 'winbar', winbar)
 end
 
@@ -116,18 +116,31 @@ function SwitchTerminal(index)
 
   if not term_win or not vim.api.nvim_win_is_valid(term_win) then
     ToggleTerminal()
-    return
-  end
-
-  local buf = terminals[current_term]
-  if buf and vim.api.nvim_buf_is_valid(buf) then
-    vim.api.nvim_win_set_buf(term_win, buf)
   else
-    terminals[current_term] = open_terminal()
+    vim.api.nvim_set_current_win(term_win)   -- ;1-5 from a code window go to the terminal
+    local buf = terminals[current_term]
+    if buf and vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_win_set_buf(term_win, buf)
+    else
+      terminals[current_term] = open_terminal()
+    end
+    render_term_tabs()
   end
 
-  render_term_tabs()
+  -- Let ntree.vim move the code to the checkout this terminal is in.
+  if TermSwitched then TermSwitched(terminals[current_term]) end
   vim.cmd('startinsert')
+end
+
+-- Make <index> the current terminal without focusing it: shown in the panel if
+-- the panel is open, otherwise next time it opens. (Used by ntree.vim.)
+function SelectTerminal(index)
+  if not (terminals[index] and vim.api.nvim_buf_is_valid(terminals[index])) then return end
+  current_term = index
+  if term_win and vim.api.nvim_win_is_valid(term_win) then
+    vim.api.nvim_win_set_buf(term_win, terminals[index])
+    render_term_tabs()
+  end
 end
 
 function NextTerminal()
