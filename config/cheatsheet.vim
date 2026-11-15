@@ -172,6 +172,7 @@ local categories = {
       { key = ";wm", desc = "ntree: back to the main checkout" },
       { key = ";wn", desc = "ntree: new workspace (+ description) and switch" },
       { key = ";wd", desc = "ntree: set/clear this workspace's description" },
+      { key = ";wt", desc = "ntree: list terminals with their workspace + description" },
     },
   },
   {

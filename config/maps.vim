@@ -38,33 +38,38 @@ local terminals = {}
 local current_term = 1
 local term_win = nil
 
-local function get_term_label(index)
-  local buf = terminals[index]
-  if buf and vim.api.nvim_buf_is_valid(buf) then
-    return string.format("[%d]", index)
-  end
-  return string.format(" %d ", index)
+-- For other config (ntree.vim): the terminal buffers by tab number, and the
+-- current tab number.
+function TerminalList()
+  return terminals, current_term
 end
 
 local function render_term_tabs()
   if not term_win or not vim.api.nvim_win_is_valid(term_win) then return end
 
+  -- Optional per-tab names (ntree.vim names a tab after the workspace its shell is in)
+  local names = TermTabNames and TermTabNames(terminals) or {}
   local tabs = ""
   local total = math.max(#terminals, current_term)
 
   for i = 1, total do
     if terminals[i] and vim.api.nvim_buf_is_valid(terminals[i]) then
+      local label = " " .. i .. " "
+      if names[i] then label = " " .. i .. " " .. (names[i]:sub(1, 18):gsub("%%", "%%%%")) .. " " end
       if i == current_term then
-        tabs = tabs .. "%#TermTabActive# " .. i .. " %*"
+        tabs = tabs .. "%#TermTabActive#" .. label .. "%*"
       else
-        tabs = tabs .. "%#TermTab# " .. i .. " %*"
+        tabs = tabs .. "%#TermTab#" .. label .. "%*"
       end
     end
   end
 
-  local winbar = "  Terminal: " .. tabs .. "%=;tn: new  ;1-5: switch  ;Enter: hide "
+  local winbar = "  Terminal: " .. tabs .. "%=;tn: new  ;1-5: switch  ;wt: list  ;Enter: hide "
   vim.api.nvim_win_set_option(term_win, 'winbar', winbar)
 end
+
+-- Leaving terminal mode is when a `cd` in the shell has happened: refresh tab names.
+vim.api.nvim_create_autocmd('TermLeave', { callback = function() render_term_tabs() end })
 
 -- Set up highlight groups for terminal tabs
 vim.api.nvim_set_hl(0, 'TermTab', { fg = '#888888', bg = '#1e1e1e' })
