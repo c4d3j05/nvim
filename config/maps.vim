@@ -150,6 +150,57 @@ local function open_terminal(dir)
   return buf
 end
 
+-- Keep the panel full width at the bottom. NERDTree opens as a full-height
+-- column on the left, which would leave the panel beside it (to its right), so
+-- whenever a tree window opens while the panel shows, move the panel back
+-- under everything at the same height. Covers ;n, ;ws and session resume.
+vim.api.nvim_create_autocmd('BufWinEnter', {
+  pattern = 'NERD_tree_*',
+  callback = function()
+    vim.schedule(function()
+      if not panel_open() then return end
+      local height = vim.api.nvim_win_get_height(term_win)
+      vim.api.nvim_win_call(term_win, function() vim.cmd('wincmd J') end)
+      vim.api.nvim_win_set_height(term_win, height)
+    end)
+  end,
+})
+
+-- Keep a code window above the panel. Closing the last one (:q) would leave the
+-- tree stretched across the top and files opening above it, so put an empty
+-- one back: right of NERDTree, or above the panel without a tree.
+local function is_code_win(w)
+  if vim.api.nvim_win_get_config(w).relative ~= '' then return false end  -- floating
+  local b = vim.api.nvim_win_get_buf(w)
+  local ft = vim.bo[b].filetype
+  return vim.bo[b].buftype ~= 'terminal' and ft ~= 'nerdtree' and ft ~= 'tagbar'
+end
+
+vim.api.nvim_create_autocmd('WinClosed', {
+  callback = function()
+    -- WinClosed runs before the window goes: read the panel height now, before
+    -- the panel grows into the freed space.
+    local height = panel_open() and vim.api.nvim_win_get_height(term_win)
+    vim.schedule(function()
+      if not panel_open() then return end
+      local tree
+      for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if is_code_win(w) then return end
+        if vim.bo[vim.api.nvim_win_get_buf(w)].filetype == 'nerdtree' then tree = w end
+      end
+      local new
+      if tree then
+        vim.api.nvim_win_call(tree, function() vim.cmd('rightbelow vnew'); new = vim.api.nvim_get_current_win() end)
+        vim.api.nvim_win_set_width(tree, vim.g.NERDTreeWinSize or 31)
+      else
+        vim.api.nvim_win_call(term_win, function() vim.cmd('aboveleft new'); new = vim.api.nvim_get_current_win() end)
+      end
+      if height then vim.api.nvim_win_set_height(term_win, height) end
+      vim.api.nvim_set_current_win(new)
+    end)
+  end,
+})
+
 -- Show the panel (if hidden) and focus it.
 local function focus_panel()
   if panel_open() then
