@@ -41,6 +41,7 @@ local terminals = {}   -- terminal buffers in tab order: tab N is terminals[N]
 local current_term = 1
 local term_win = nil
 local term_height = 15
+local stay_normal = false   -- while set, entering a terminal window doesn't start terminal mode
 
 -- For other config (ntree.vim): the terminal buffers by tab number, and the
 -- current tab number.
@@ -137,15 +138,27 @@ local function hide_panel()
   term_win = nil
 end
 
--- Show terminal <index> in the panel and focus it. Args: <index>, [follow]
--- (follow: let ntree.vim move the code to the checkout this terminal is in)
-local function show_terminal(index, follow)
+-- Entering a terminal window starts terminal mode, except while a switch made
+-- from normal mode is running (show_terminal with insert = false).
+vim.api.nvim_create_autocmd({ 'BufEnter', 'WinEnter' }, {
+  pattern = 'term://*',
+  callback = function() if not stay_normal then vim.cmd('startinsert') end end,
+})
+
+-- Show terminal <index> in the panel and focus it. Args: <index>, [follow], [insert]
+-- (follow: let ntree.vim move the code to the checkout this terminal is in;
+--  insert: end in terminal mode, default true. Switches from normal mode pass
+--  false so ;1 ;2 ;3 / ;th ;tl can be pressed one after another.)
+local function show_terminal(index, follow, insert)
+  insert = insert ~= false
   current_term = index
+  stay_normal = not insert
   focus_panel()
   vim.api.nvim_win_set_buf(term_win, terminals[index])
   render_term_tabs()
   if follow and TermSwitched then TermSwitched(terminals[index]) end
-  vim.cmd('startinsert')
+  stay_normal = false
+  vim.cmd(insert and 'startinsert' or 'stopinsert')
 end
 
 function NewTerminal()
@@ -166,26 +179,27 @@ function ToggleTerminal()
   if #terminals == 0 then NewTerminal() else show_terminal(current_term) end
 end
 
-function SwitchTerminal(index)
+-- Args: <index>, [insert] (false: stay in normal mode)
+function SwitchTerminal(index, insert)
   prune()
   if not terminals[index] then
     vim.notify(#terminals == 0 and 'no terminals — ;tn opens one'
       or ('no terminal ' .. index .. ' (there are ' .. #terminals .. ')'), vim.log.levels.WARN)
     return
   end
-  show_terminal(index, true)
+  show_terminal(index, true, insert)
 end
 
-function NextTerminal()
+function NextTerminal(insert)
   prune()
   if #terminals == 0 then return NewTerminal() end
-  show_terminal(current_term % #terminals + 1, true)
+  show_terminal(current_term % #terminals + 1, true, insert)
 end
 
-function PrevTerminal()
+function PrevTerminal(insert)
   prune()
   if #terminals == 0 then return NewTerminal() end
-  show_terminal((current_term - 2) % #terminals + 1, true)
+  show_terminal((current_term - 2) % #terminals + 1, true, insert)
 end
 
 -- Make <index> the current terminal without focusing it: shown in the panel if
@@ -248,10 +262,11 @@ EOF
 nnoremap <leader><CR> :lua ToggleTerminal()<CR>
 nnoremap <leader>tn :lua NewTerminal()<CR>
 nnoremap <leader>tx :lua CloseTerminal()<CR>
-nnoremap <leader>tl :lua NextTerminal()<CR>
-nnoremap <leader>th :lua PrevTerminal()<CR>
+" switching from normal mode stays in normal mode, so these can be chained
+nnoremap <leader>tl :lua NextTerminal(false)<CR>
+nnoremap <leader>th :lua PrevTerminal(false)<CR>
 for i in range(1, 9)
-  execute 'nnoremap <leader>' . i . ' :lua SwitchTerminal(' . i . ')<CR>'
+  execute 'nnoremap <leader>' . i . ' :lua SwitchTerminal(' . i . ', false)<CR>'
 endfor
 
 " Terminal mode: Alt, so ; types instantly in the shell
@@ -276,9 +291,6 @@ tnoremap <M-Down> <C-\><C-n>:wincmd j<CR>
 tnoremap <M-Left> <C-\><C-n>:wincmd h<CR>
 tnoremap <M-Right> <C-\><C-n>:wincmd l<CR>
 
-" Auto-enter terminal mode when switching to terminal buffer
-autocmd BufEnter term://* startinsert
-autocmd WinEnter term://* startinsert
 
 " Resize splits with ;= and ;- (height) and ;. and ;, (width)
 nnoremap <leader>= :resize +5<CR>
