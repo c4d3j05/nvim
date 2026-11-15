@@ -158,10 +158,20 @@ local categories = {
       { key = ";gSp", desc = "Git stash pop" },
       { key = ";gSl", desc = "Git stash list" },
       { key = ";gcp", desc = "Git cherry-pick (enter hash)" },
+      { key = ";gg", desc = "Neogit status" },
       { key = "[c  ]c", desc = "Prev/next hunk (gitgutter)" },
       { key = ";hp", desc = "Preview hunk" },
       { key = ";hs", desc = "Stage hunk" },
       { key = ";hu", desc = "Undo hunk" },
+    },
+  },
+  {
+    name = "Workspaces",
+    keys = {
+      { key = ";ws", desc = "ntree: switch to a workspace (picker)" },
+      { key = ";wm", desc = "ntree: back to the main checkout" },
+      { key = ";wn", desc = "ntree: new workspace (+ description) and switch" },
+      { key = ";wd", desc = "ntree: set/clear this workspace's description" },
     },
   },
   {
