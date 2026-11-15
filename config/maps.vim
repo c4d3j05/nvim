@@ -209,5 +209,8 @@ nnoremap <leader>gSp :Git stash pop<CR>
 nnoremap <leader>gSl :Git stash list<CR>
 nnoremap <leader>gcp :Git cherry-pick<Space>
 
+" Git (neogit)
+nnoremap <leader>gg :Neogit<CR>
+
 " Cheatsheet
 nnoremap <leader>? :Cheatsheet<CR>

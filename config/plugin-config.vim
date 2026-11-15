@@ -110,6 +110,14 @@ if ok then
 end
 EOF
 
+" Neogit
+lua << EOF
+local ok, neogit = pcall(require, 'neogit')
+if ok then
+  neogit.setup({})
+end
+EOF
+
 " ============================================================================
 " CoC (Conquer of Completion) Configuration
 " ============================================================================

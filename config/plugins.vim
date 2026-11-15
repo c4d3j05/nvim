@@ -19,6 +19,7 @@ call plug#begin('~/.config/nvim/plugged')
     " Git
     Plug 'airblade/vim-gitgutter'
     Plug 'tpope/vim-fugitive'
+    Plug 'NeogitOrg/neogit'
 
     " LSP & Completion
     Plug 'neoclide/coc.nvim', {'branch': 'release'}
