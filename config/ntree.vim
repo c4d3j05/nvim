@@ -30,36 +30,19 @@ local function ntree_current(main_root)
   return cwd:sub(#prefix + 1):match('^[^/]+')
 end
 
--- The workspaces of the repo at main_root: name -> { branch, port, running,
--- desc }. Live status and checked-out branch come from `ntree list` (it
--- verifies pids and asks git); ports and description from state.json.
+-- The workspaces of the repo at main_root: name -> { branch, port, status,
+-- desc }, from `ntree list --json` (live status, branch checked out now).
 local function ntree_workspaces(main_root)
-  local live = {}
-  local cmd = 'cd ' .. vim.fn.shellescape(main_root) .. ' && ntree list 2>/dev/null'
-  for _, l in ipairs(vim.fn.systemlist(cmd)) do
-    local name, branch = l:match('^(%S+)%s+(%S+)')
-    if name and name ~= 'NAME' and name ~= '(root)' then
-      live[name] = { branch = branch, running = l:find(' running ', 1, true) ~= nil }
-    end
-  end
-
+  local out = vim.fn.system('cd ' .. vim.fn.shellescape(main_root) .. ' && ntree list --json 2>/dev/null')
+  local ok, data = pcall(vim.json.decode, out)
+  if not ok or type(data) ~= 'table' then return {} end
   local result = {}
-  local state_path = main_root .. '/.ntree/state.json'
-  if vim.fn.filereadable(state_path) == 1 then
-    local ok, data = pcall(vim.fn.json_decode, table.concat(vim.fn.readfile(state_path), '\n'))
-    if ok and data and data.workspaces then
-      for name, ws in pairs(data.workspaces) do
-        local l = live[name] or {}
-        local desc = ws.desc
-        if desc == vim.NIL or desc == '' then desc = nil end
-        result[name] = {
-          branch = l.branch or ws.branch,
-          port = type(ws.ports) == 'table' and ws.ports[1] or nil,
-          running = l.running,
-          desc = desc,
-        }
-      end
-    end
+  for _, ws in ipairs(data.workspaces or {}) do
+    local desc = ws.desc
+    if desc == vim.NIL then desc = nil end
+    local port = ws.port
+    if port == vim.NIL then port = nil end
+    result[ws.name] = { branch = ws.branch, port = port, status = ws.status, desc = desc }
   end
   return result
 end
@@ -76,7 +59,7 @@ local function ntree_entries()
   for _, name in ipairs(names) do
     local ws = workspaces[name]
     table.insert(entries, {
-      name = name, branch = ws.branch, port = ws.port, running = ws.running, desc = ws.desc,
+      name = name, branch = ws.branch, port = ws.port, status = ws.status, desc = ws.desc,
       path = main_root .. '/.ntree/' .. name, current = name == current,
     })
   end
@@ -231,9 +214,9 @@ function NtreeSwitch()
       results = entries,
       entry_maker = function(e)
         local mark = e.current and '*' or ' '
-        local status = e.running and 'running' or ''
+        local status = (e.status and e.status ~= 'stopped') and e.status or ''
         local port = e.port and (':' .. e.port) or ''
-        local display = string.format('%s %-18s %-22s %-6s %-8s %s',
+        local display = string.format('%s %-18s %-22s %-6s %-9s %s',
           mark, e.name, e.branch or '', port, status, e.desc or '')
         return {
           value = e,
