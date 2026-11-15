@@ -4,5 +4,6 @@ so ~/.config/nvim/config/options.vim
 so ~/.config/nvim/config/plugin-config.vim
 so ~/.config/nvim/config/cheatsheet.vim
 so ~/.config/nvim/config/ntree.vim
+so ~/.config/nvim/config/session.vim
 
 

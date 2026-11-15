@@ -83,30 +83,9 @@ local function ntree_entries()
   return entries
 end
 
--- The working directory of each terminal's shell (it follows `cd` in the shell;
--- nvim's own idea of the buffer's directory doesn't). One lsof call for all of
--- them on macOS, /proc on Linux. Args: { [tab] = buf }. Returns { [buf] = cwd }.
+-- Each terminal's shell cwd (from the terminal manager in maps.vim).
 local function term_cwds(term_bufs)
-  local by_pid, pids, out = {}, {}, {}
-  for _, buf in pairs(term_bufs) do
-    if vim.api.nvim_buf_is_valid(buf) then
-      local ok, pid = pcall(vim.fn.jobpid, vim.bo[buf].channel)
-      if ok and pid and pid > 0 then by_pid[pid] = buf; table.insert(pids, pid) end
-    end
-  end
-  if #pids == 0 then return out end
-  if vim.fn.has('linux') == 1 then
-    for pid, buf in pairs(by_pid) do out[buf] = vim.uv.fs_readlink('/proc/' .. pid .. '/cwd') end
-  else
-    local pid
-    for _, l in ipairs(vim.fn.systemlist({ 'lsof', '-a', '-d', 'cwd', '-p', table.concat(pids, ','), '-Fpn' })) do
-      local p = l:match('^p(%d+)')
-      if p then pid = tonumber(p) end
-      local n = l:match('^n(.+)')
-      if n and pid and by_pid[pid] then out[by_pid[pid]] = n end
-    end
-  end
-  return out
+  return TerminalCwds and TerminalCwds(term_bufs) or {}
 end
 
 -- <main root>, <workspace name> when path is inside <main>/.ntree/<name>.

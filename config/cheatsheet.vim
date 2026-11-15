@@ -20,6 +20,9 @@ local categories = {
       { key = ";tt", desc = "Toggle Tagbar" },
       { key = ";Enter", desc = "Toggle terminal (hide/show)" },
       { key = ";?", desc = "Open this cheatsheet" },
+      { key = ";qs", desc = "Save session (files, layout, terminals) and quit" },
+      { key = ";rs", desc = "Resume the saved session for this repo" },
+      { key = "nv  (shell)", desc = "Neovim in tmux per repo; Ctrl-b d detaches, nv resumes" },
     },
   },
   {

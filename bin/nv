@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# nv — Neovim in a tmux session per repo.
+#
+#   nv          attach to this repo's session, or start it (nvim then resumes the
+#               session saved with ;qs, if there is one)
+#   nv ls       list the running nv sessions
+#   nv kill     end this repo's session (nvim quits without saving; ;qs first)
+#
+# Detach with Ctrl-b d: nvim, its terminals and whatever runs in them keep going.
+# Runs its own tmux server (tmux -L nv) with ~/.config/nvim/tmux.conf, so other
+# tmux use is untouched. A repo's ntree workspaces share its session.
+set -euo pipefail
+
+t() { tmux -L nv -f "$HOME/.config/nvim/tmux.conf" "$@"; }
+
+if common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+  root="$(dirname "$common")"
+else
+  root="$PWD"
+fi
+# Session names can't contain '.' or ':'; the hash tells same-named repos apart.
+name="$(printf '%s' "$(basename "$root")" | tr -c 'A-Za-z0-9_-' '_')-$(printf '%s' "$root" | shasum | cut -c1-6)"
+
+case "${1:-}" in
+  ls)   t ls 2>/dev/null || echo "no nv sessions running"; exit 0 ;;
+  kill) t kill-session -t "=$name"; exit 0 ;;
+  "")   ;;
+  *)    echo "usage: nv [ls|kill]" >&2; exit 2 ;;
+esac
+
+if ! t has-session -t "=$name" 2>/dev/null; then
+  t new-session -d -s "$name" -c "$root" -e NV_RESTORE=1 nvim
+fi
+# From inside another tmux, attach anyway (it's a separate server).
+TMUX='' exec tmux -L nv -f "$HOME/.config/nvim/tmux.conf" attach -t "=$name"

@@ -10,6 +10,9 @@ This is a modular Neovim configuration using Vimscript and vim-plug. It splits s
 - `config/options.vim`: Editor options (UI, search, indentation, etc.).
 - `config/maps.vim`: Keymaps and leader settings.
 - `config/cheatsheet.vim`: In-editor cheatsheet (scratch buffer) and `:Cheatsheet` command.
+- `config/ntree.vim`: ntree workspace switching (`;ws` `;wm` `;wn` `;wd`).
+- `config/session.vim`: Save and resume sessions (`;qs` `;rs`).
+- `bin/nv`, `tmux.conf`: Neovim in a tmux session per repo.
 
 ## Prerequisites
 
@@ -150,6 +153,24 @@ This config includes both GitHub Copilot suggestions and Copilot Chat integratio
 - Accept Copilot suggestion: `Ctrl-j` in insert mode (custom mapping)
 
 For more details, see the plugin repo: [CopilotChat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim).
+
+## Closing and resuming
+
+Two ways, for two situations:
+
+- **Keep everything running — `nv`.** Start Neovim with `nv` in a repo: it runs
+  inside a tmux session for that repo. `Ctrl-b d` detaches; Neovim, its terminals
+  and whatever runs in them (agents, dev servers) keep going. `nv` again reattaches
+  exactly where you were. `nv ls` lists sessions, `nv kill` ends this repo's one.
+  `nv` uses its own tmux server and `tmux.conf`, so other tmux use is untouched.
+  Put `~/.config/nvim/bin` on your `PATH`.
+- **Close for real — `;qs`.** Saves every file, saves the session and quits. `;rs`
+  (or `nv`, which resumes on its own) brings back windows, splits, open files,
+  cursor positions, the checkout you were in, NERDTree and the terminal tabs in
+  order, each in the folder its shell was in. What ran inside a terminal is gone;
+  `ntree run -d` servers survive since they don't belong to Neovim. Plain `nvim`
+  just tells you a saved session exists. One session per repo, stored under
+  `stdpath('state')/sessions`.
 
 ## Theme
 

@@ -53,6 +53,37 @@ local function panel_open()
   return term_win ~= nil and vim.api.nvim_win_is_valid(term_win)
 end
 
+-- For session.vim: whether the panel is open, and its height.
+function TerminalPanel()
+  return panel_open(), panel_open() and vim.api.nvim_win_get_height(term_win) or term_height
+end
+
+-- The working directory of each terminal's shell (it follows `cd` in the shell;
+-- nvim's own idea of the buffer's directory doesn't). One lsof call for all of
+-- them on macOS, /proc on Linux. Args: { [tab] = buf }. Returns { [buf] = cwd }.
+function TerminalCwds(term_bufs)
+  local by_pid, pids, out = {}, {}, {}
+  for _, buf in pairs(term_bufs) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      local ok, pid = pcall(vim.fn.jobpid, vim.bo[buf].channel)
+      if ok and pid and pid > 0 then by_pid[pid] = buf; table.insert(pids, pid) end
+    end
+  end
+  if #pids == 0 then return out end
+  if vim.fn.has('linux') == 1 then
+    for pid, buf in pairs(by_pid) do out[buf] = vim.uv.fs_readlink('/proc/' .. pid .. '/cwd') end
+  else
+    local pid
+    for _, l in ipairs(vim.fn.systemlist({ 'lsof', '-a', '-d', 'cwd', '-p', table.concat(pids, ','), '-Fpn' })) do
+      local p = l:match('^p(%d+)')
+      if p then pid = tonumber(p) end
+      local n = l:match('^n(.+)')
+      if n and pid and by_pid[pid] then out[by_pid[pid]] = n end
+    end
+  end
+  return out
+end
+
 -- Drop terminals whose buffer is gone, keeping the list dense (tabs renumber)
 -- and the current tab on the same terminal when it survives.
 local function prune()
@@ -106,8 +137,14 @@ vim.api.nvim_set_hl(0, 'TermTabActive', { fg = '#1e1e1e', bg = '#7dcfff', bold =
 
 -- Terminals are unlisted, so :bn/:bp (;] ;[), ;x and Telescope buffers only
 -- see files. The manager keeps track of them itself in `terminals`.
-local function open_terminal()
-  vim.cmd('terminal')
+-- Args: [dir] (start the shell there instead of nvim's cwd)
+local function open_terminal(dir)
+  if dir and vim.fn.isdirectory(dir) == 1 then
+    vim.cmd('enew')
+    vim.fn.jobstart(vim.o.shell, { term = true, cwd = dir })
+  else
+    vim.cmd('terminal')
+  end
   local buf = vim.api.nvim_get_current_buf()
   vim.bo[buf].buflisted = false
   return buf
@@ -161,10 +198,11 @@ local function show_terminal(index, follow, insert)
   vim.cmd(insert and 'startinsert' or 'stopinsert')
 end
 
-function NewTerminal()
+-- Args: [dir] (start the shell there; session.vim uses it to reopen terminals)
+function NewTerminal(dir)
   prune()
   focus_panel()
-  table.insert(terminals, open_terminal())
+  table.insert(terminals, open_terminal(dir))
   current_term = #terminals
   render_term_tabs()
   vim.cmd('startinsert')
