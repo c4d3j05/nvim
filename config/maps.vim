@@ -33,10 +33,14 @@ nnoremap <leader>tt :TagbarToggle<CR>
 inoremap jj <Esc>
 
 " Terminal manager with multiple tabs
+"   normal mode:   ;Enter show/hide   ;tn new   ;tx close   ;1-;9 go to   ;th ;tl prev/next
+"   terminal mode: the same with Alt (M-Enter, M-n, M-x, M-1..9, M-h M-l), so typing
+"                  ; in a shell never waits for a mapping
 lua << EOF
-local terminals = {}
+local terminals = {}   -- terminal buffers in tab order: tab N is terminals[N]
 local current_term = 1
 local term_win = nil
+local term_height = 15
 
 -- For other config (ntree.vim): the terminal buffers by tab number, and the
 -- current tab number.
@@ -44,27 +48,51 @@ function TerminalList()
   return terminals, current_term
 end
 
-local function render_term_tabs()
-  if not term_win or not vim.api.nvim_win_is_valid(term_win) then return end
+local function panel_open()
+  return term_win ~= nil and vim.api.nvim_win_is_valid(term_win)
+end
 
+-- Drop terminals whose buffer is gone, keeping the list dense (tabs renumber)
+-- and the current tab on the same terminal when it survives.
+local function prune()
+  local cur_buf, alive = terminals[current_term], {}
+  for _, buf in ipairs(terminals) do
+    if vim.api.nvim_buf_is_valid(buf) then table.insert(alive, buf) end
+  end
+  terminals = alive
+  current_term = math.max(1, math.min(current_term, #terminals))
+  for i, buf in ipairs(terminals) do
+    if buf == cur_buf then current_term = i end
+  end
+end
+
+local HELP = ";tn new  ;tx close  ;th ;tl switch  ;Enter hide  (Alt in terminal) "
+
+local function render_term_tabs()
+  if not panel_open() then return end
   -- Optional per-tab names (ntree.vim names a tab after the workspace its shell is in)
   local names = TermTabNames and TermTabNames(terminals) or {}
-  local tabs = ""
-  local total = math.max(#terminals, current_term)
+  local width = vim.api.nvim_win_get_width(term_win)
 
-  for i = 1, total do
-    if terminals[i] and vim.api.nvim_buf_is_valid(terminals[i]) then
+  -- Shorten labels until the row fits: full names, short names, numbers, no help.
+  local function build(name_len, help)
+    local parts, len = {}, #"  Terminal: "
+    for i in ipairs(terminals) do
       local label = " " .. i .. " "
-      if names[i] then label = " " .. i .. " " .. (names[i]:sub(1, 18):gsub("%%", "%%%%")) .. " " end
-      if i == current_term then
-        tabs = tabs .. "%#TermTabActive#" .. label .. "%*"
-      else
-        tabs = tabs .. "%#TermTab#" .. label .. "%*"
-      end
+      if names[i] and name_len > 0 then label = " " .. i .. " " .. names[i]:sub(1, name_len) .. " " end
+      len = len + vim.fn.strdisplaywidth(label)
+      local hl = i == current_term and "%#TermTabActive#" or "%#TermTab#"
+      table.insert(parts, hl .. label:gsub("%%", "%%%%") .. "%*")
     end
+    if help then len = len + #help end
+    return "  Terminal: " .. table.concat(parts) .. (help and ("%=" .. help) or ""), len
   end
-
-  local winbar = "  Terminal: " .. tabs .. "%=;tn: new  ;1-5: switch  ;Enter: hide "
+  local winbar
+  for _, try in ipairs({ { 18, HELP }, { 8, HELP }, { 0, HELP }, { 18, nil }, { 8, nil }, { 0, nil } }) do
+    local bar, len = build(try[1], try[2])
+    winbar = bar
+    if len <= width then break end
+  end
   vim.api.nvim_win_set_option(term_win, 'winbar', winbar)
 end
 
@@ -84,123 +112,169 @@ local function open_terminal()
   return buf
 end
 
-function ToggleTerminal()
-  if term_win and vim.api.nvim_win_is_valid(term_win) then
-    -- Terminal is visible, hide it
-    vim.api.nvim_win_hide(term_win)
-    term_win = nil
+-- Show the panel (if hidden) and focus it.
+local function focus_panel()
+  if panel_open() then
+    vim.api.nvim_set_current_win(term_win)
     return
   end
-
-  -- Show terminal
   vim.cmd('botright split')
   term_win = vim.api.nvim_get_current_win()
-  vim.api.nvim_win_set_option(term_win, 'number', false)
-  vim.api.nvim_win_set_option(term_win, 'relativenumber', false)
-  vim.api.nvim_win_set_option(term_win, 'signcolumn', 'no')
+  vim.api.nvim_win_set_height(term_win, term_height)
+  vim.wo[term_win].number = false
+  vim.wo[term_win].relativenumber = false
+  vim.wo[term_win].signcolumn = 'no'
+end
 
-  local buf = terminals[current_term]
-  if buf and vim.api.nvim_buf_is_valid(buf) then
-    vim.api.nvim_win_set_buf(term_win, buf)
+local function hide_panel()
+  if not panel_open() then return end
+  term_height = vim.api.nvim_win_get_height(term_win)
+  if #vim.api.nvim_tabpage_list_wins(0) == 1 then
+    vim.api.nvim_win_call(term_win, function() vim.cmd('enew') end)  -- can't close the last window
   else
-    terminals[current_term] = open_terminal()
+    vim.api.nvim_win_hide(term_win)
   end
+  term_win = nil
+end
 
-  vim.cmd('resize 15')
+-- Show terminal <index> in the panel and focus it. Args: <index>, [follow]
+-- (follow: let ntree.vim move the code to the checkout this terminal is in)
+local function show_terminal(index, follow)
+  current_term = index
+  focus_panel()
+  vim.api.nvim_win_set_buf(term_win, terminals[index])
+  render_term_tabs()
+  if follow and TermSwitched then TermSwitched(terminals[index]) end
+  vim.cmd('startinsert')
+end
+
+function NewTerminal()
+  prune()
+  focus_panel()
+  table.insert(terminals, open_terminal())
+  current_term = #terminals
   render_term_tabs()
   vim.cmd('startinsert')
 end
 
-function SwitchTerminal(index)
-  current_term = index
-
-  if not term_win or not vim.api.nvim_win_is_valid(term_win) then
-    ToggleTerminal()
-  else
-    vim.api.nvim_set_current_win(term_win)   -- ;1-5 from a code window go to the terminal
-    local buf = terminals[current_term]
-    if buf and vim.api.nvim_buf_is_valid(buf) then
-      vim.api.nvim_win_set_buf(term_win, buf)
-    else
-      terminals[current_term] = open_terminal()
-    end
-    render_term_tabs()
+function ToggleTerminal()
+  if panel_open() then
+    hide_panel()
+    return
   end
+  prune()
+  if #terminals == 0 then NewTerminal() else show_terminal(current_term) end
+end
 
-  -- Let ntree.vim move the code to the checkout this terminal is in.
-  if TermSwitched then TermSwitched(terminals[current_term]) end
-  vim.cmd('startinsert')
+function SwitchTerminal(index)
+  prune()
+  if not terminals[index] then
+    vim.notify(#terminals == 0 and 'no terminals — ;tn opens one'
+      or ('no terminal ' .. index .. ' (there are ' .. #terminals .. ')'), vim.log.levels.WARN)
+    return
+  end
+  show_terminal(index, true)
+end
+
+function NextTerminal()
+  prune()
+  if #terminals == 0 then return NewTerminal() end
+  show_terminal(current_term % #terminals + 1, true)
+end
+
+function PrevTerminal()
+  prune()
+  if #terminals == 0 then return NewTerminal() end
+  show_terminal((current_term - 2) % #terminals + 1, true)
 end
 
 -- Make <index> the current terminal without focusing it: shown in the panel if
 -- the panel is open, otherwise next time it opens. (Used by ntree.vim.)
 function SelectTerminal(index)
-  if not (terminals[index] and vim.api.nvim_buf_is_valid(terminals[index])) then return end
+  prune()
+  if not terminals[index] then return end
   current_term = index
-  if term_win and vim.api.nvim_win_is_valid(term_win) then
+  if panel_open() then
     vim.api.nvim_win_set_buf(term_win, terminals[index])
     render_term_tabs()
   end
 end
 
-function NextTerminal()
-  local next = current_term + 1
-  if next > #terminals then next = 1 end
-  if next < 1 then next = 1 end
-  SwitchTerminal(next)
-end
-
-function PrevTerminal()
-  local prev = current_term - 1
-  if prev < 1 then prev = math.max(#terminals, 1) end
-  SwitchTerminal(prev)
-end
-
-function NewTerminal()
-  current_term = #terminals + 1
-  if term_win and vim.api.nvim_win_is_valid(term_win) then
-    terminals[current_term] = open_terminal()
-    render_term_tabs()
-    vim.cmd('startinsert')
-  else
-    ToggleTerminal()
+-- Remove terminal <buf> from the list (later tabs renumber). If the panel was
+-- showing it, show a neighbour instead, or hide the panel if none are left.
+local function remove_terminal(buf)
+  local index
+  for i, b in ipairs(terminals) do if b == buf then index = i end end
+  if not index then return end
+  -- When a shell exits, nvim may already have closed the panel window with it.
+  local was_shown = term_win ~= nil and (not panel_open() or vim.api.nvim_win_get_buf(term_win) == buf)
+  table.remove(terminals, index)
+  if current_term > index or current_term > #terminals then current_term = math.max(1, current_term - 1) end
+  if was_shown then
+    if #terminals == 0 then
+      hide_panel()
+      term_win = nil
+    else
+      focus_panel()
+      vim.api.nvim_win_set_buf(term_win, terminals[current_term])
+      if TermSwitched then TermSwitched(terminals[current_term]) end
+    end
   end
+  if vim.api.nvim_buf_is_valid(buf) then pcall(vim.api.nvim_buf_delete, buf, { force = true }) end
+  render_term_tabs()
 end
+
+function CloseTerminal()
+  prune()
+  local buf = terminals[current_term]
+  if buf then remove_terminal(buf) end
+end
+
+-- A shell exited (e.g. `exit`): take its tab out and renumber, keeping the panel
+-- open on a neighbour.
+vim.api.nvim_create_autocmd('TermClose', {
+  callback = function(ev)
+    for _, b in ipairs(terminals) do
+      if b == ev.buf then
+        vim.schedule(function() remove_terminal(ev.buf) end)
+        return
+      end
+    end
+  end,
+})
 EOF
 
-" Toggle terminal
+" Normal mode
 nnoremap <leader><CR> :lua ToggleTerminal()<CR>
-tnoremap <leader><CR> <C-\><C-n>:lua ToggleTerminal()<CR>
-
-" Switch terminal tabs with ;1, ;2, ;3, etc.
-nnoremap <leader>1 :lua SwitchTerminal(1)<CR>
-nnoremap <leader>2 :lua SwitchTerminal(2)<CR>
-nnoremap <leader>3 :lua SwitchTerminal(3)<CR>
-nnoremap <leader>4 :lua SwitchTerminal(4)<CR>
-nnoremap <leader>5 :lua SwitchTerminal(5)<CR>
-tnoremap <leader>1 <C-\><C-n>:lua SwitchTerminal(1)<CR>
-tnoremap <leader>2 <C-\><C-n>:lua SwitchTerminal(2)<CR>
-tnoremap <leader>3 <C-\><C-n>:lua SwitchTerminal(3)<CR>
-tnoremap <leader>4 <C-\><C-n>:lua SwitchTerminal(4)<CR>
-tnoremap <leader>5 <C-\><C-n>:lua SwitchTerminal(5)<CR>
-
-" New terminal
 nnoremap <leader>tn :lua NewTerminal()<CR>
-tnoremap <leader>tn <C-\><C-n>:lua NewTerminal()<CR>
+nnoremap <leader>tx :lua CloseTerminal()<CR>
+nnoremap <leader>tl :lua NextTerminal()<CR>
+nnoremap <leader>th :lua PrevTerminal()<CR>
+for i in range(1, 9)
+  execute 'nnoremap <leader>' . i . ' :lua SwitchTerminal(' . i . ')<CR>'
+endfor
 
-" Cycle terminals with Ctrl+Tab (in terminal mode)
+" Terminal mode: Alt, so ; types instantly in the shell
+tnoremap <M-CR> <C-\><C-n>:lua ToggleTerminal()<CR>
+tnoremap <M-n> <C-\><C-n>:lua NewTerminal()<CR>
+tnoremap <M-x> <C-\><C-n>:lua CloseTerminal()<CR>
+tnoremap <M-l> <C-\><C-n>:lua NextTerminal()<CR>
+tnoremap <M-h> <C-\><C-n>:lua PrevTerminal()<CR>
 tnoremap <C-Tab> <C-\><C-n>:lua NextTerminal()<CR>
 tnoremap <C-S-Tab> <C-\><C-n>:lua PrevTerminal()<CR>
+for i in range(1, 9)
+  execute 'tnoremap <M-' . i . '> <C-\><C-n>:lua SwitchTerminal(' . i . ')<CR>'
+endfor
 
 " Exit terminal mode with Esc or jj
 tnoremap <Esc> <C-\><C-n>
 tnoremap jj <C-\><C-n>
 
-" Navigate from terminal mode directly
-tnoremap <leader><Up> <C-\><C-n>:wincmd k<CR>
-tnoremap <leader><Down> <C-\><C-n>:wincmd j<CR>
-tnoremap <leader><Left> <C-\><C-n>:wincmd h<CR>
-tnoremap <leader><Right> <C-\><C-n>:wincmd l<CR>
+" Navigate from terminal mode directly (Alt-arrows)
+tnoremap <M-Up> <C-\><C-n>:wincmd k<CR>
+tnoremap <M-Down> <C-\><C-n>:wincmd j<CR>
+tnoremap <M-Left> <C-\><C-n>:wincmd h<CR>
+tnoremap <M-Right> <C-\><C-n>:wincmd l<CR>
 
 " Auto-enter terminal mode when switching to terminal buffer
 autocmd BufEnter term://* startinsert
@@ -212,11 +286,11 @@ nnoremap <leader>- :resize -5<CR>
 nnoremap <leader>. :vertical resize +5<CR>
 nnoremap <leader>, :vertical resize -5<CR>
 
-" Also work from terminal mode
-tnoremap <leader>= <C-\><C-n>:resize +5<CR>i
-tnoremap <leader>- <C-\><C-n>:resize -5<CR>i
-tnoremap <leader>. <C-\><C-n>:vertical resize +5<CR>i
-tnoremap <leader>, <C-\><C-n>:vertical resize -5<CR>i
+" Also work from terminal mode (Alt)
+tnoremap <M-=> <C-\><C-n>:resize +5<CR>i
+tnoremap <M--> <C-\><C-n>:resize -5<CR>i
+tnoremap <M-.> <C-\><C-n>:vertical resize +5<CR>i
+tnoremap <M-,> <C-\><C-n>:vertical resize -5<CR>i
 
 " Git (vim-fugitive)
 nnoremap <leader>gs :Git<CR>
