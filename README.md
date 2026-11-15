@@ -164,13 +164,14 @@ Two ways, for two situations:
   exactly where you were. `nv ls` lists sessions, `nv kill` ends this repo's one.
   `nv` uses its own tmux server and `tmux.conf`, so other tmux use is untouched.
   Put `~/.config/nvim/bin` on your `PATH`.
-- **Close for real — `;qs`.** Saves every file, saves the session and quits. `;rs`
-  (or `nv`, which resumes on its own) brings back windows, splits, open files,
+- **Close for real.** `nvim` with no file arguments is a session: quitting saves it
+  and the next `nvim` in the repo resumes it — windows, splits, open files,
   cursor positions, the checkout you were in, NERDTree and the terminal tabs in
-  order, each in the folder its shell was in. What ran inside a terminal is gone;
-  `ntree run -d` servers survive since they don't belong to Neovim. Plain `nvim`
-  just tells you a saved session exists. One session per repo, stored under
-  `stdpath('state')/sessions`.
+  order, each in the folder its shell was in. `;qs` writes every file, saves and
+  quits in one go; `;rs` resumes by hand. What ran inside a terminal is gone;
+  `ntree run -d` servers survive since they don't belong to Neovim. `nvim <file>`,
+  `nvim .` and piped input are plain edits that leave the session alone. One
+  session per repo, stored under `stdpath('state')/sessions`.
 
 ## Theme
 

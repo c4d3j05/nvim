@@ -1,6 +1,9 @@
 " Sessions: close everything and resume it later ----------------------------
-" <leader>qs  save the session, write all files and quit (terminals included)
-" <leader>rs  resume the saved session for this repo
+" `nvim` with no file arguments resumes this repo's saved session on start and
+" saves it again on quit. `nvim <file>`, `nvim .` or piped input are plain
+" edits: no resume, and the session is left as it was.
+" <leader>qs  write all files, save the session and quit (terminals included)
+" <leader>rs  resume the saved session by hand
 "
 " One session per repo (keyed by the main checkout, so it's shared by the ntree
 " workspaces). It brings back windows, splits, open files and cursor positions,
@@ -9,9 +12,6 @@
 " agent, a dev server started by hand) does not survive quitting; `ntree run -d`
 " servers do, they don't belong to nvim. To keep everything running instead,
 " use `nv` (tmux) and detach.
-"
-" Started by `nv` (NV_RESTORE=1, no file arguments), nvim resumes on its own;
-" plain `nvim` only says that a saved session exists.
 
 lua << EOF
 local function session_root()
@@ -61,6 +61,9 @@ function SessionSave()
   return root
 end
 
+local session_mode = false   -- started with no files and a UI: resume on start, save on quit
+local saved_for_quit = false -- ;qs already saved; don't save again on the way out
+
 function SessionSaveQuit()
   local ok, err = pcall(vim.cmd, 'wall')
   if not ok then
@@ -68,6 +71,7 @@ function SessionSaveQuit()
     return
   end
   SessionSave()
+  saved_for_quit = true
   vim.cmd('qa!')   -- ! ends the terminal jobs; every file was just written
 end
 
@@ -105,18 +109,23 @@ function SessionRestore()
     .. (#dirs > 0 and (' (' .. #dirs .. ' terminal' .. (#dirs == 1 and '' or 's') .. ')') or ''))
 end
 
+local from_stdin = false
+vim.api.nvim_create_autocmd('StdinReadPost', { callback = function() from_stdin = true end })
+
 vim.api.nvim_create_autocmd('VimEnter', {
   callback = function()
-    if vim.fn.argc() > 0 then return end
+    -- Only a plain `nvim` with a UI is a session; files, stdin or headless use aren't.
+    if vim.fn.argc() > 0 or from_stdin or #vim.api.nvim_list_uis() == 0 then return end
+    session_mode = true
     vim.schedule(function()
-      local vim_file = session_files(session_root())
-      if vim.fn.filereadable(vim_file) == 0 then return end
-      if vim.env.NV_RESTORE == '1' then
-        SessionRestore()
-      else
-        vim.notify('saved session for this repo — ;rs to resume')
-      end
+      if vim.fn.filereadable((session_files(session_root()))) == 1 then SessionRestore() end
     end)
+  end,
+})
+
+vim.api.nvim_create_autocmd('VimLeavePre', {
+  callback = function()
+    if session_mode and not saved_for_quit then pcall(SessionSave) end
   end,
 })
 EOF

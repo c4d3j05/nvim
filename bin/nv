@@ -2,7 +2,7 @@
 # nv — Neovim in a tmux session per repo.
 #
 #   nv          attach to this repo's session, or start it (nvim then resumes the
-#               session saved with ;qs, if there is one)
+#               saved session, if there is one)
 #   nv ls       list the running nv sessions
 #   nv kill     end this repo's session (nvim quits without saving; ;qs first)
 #
@@ -29,7 +29,7 @@ case "${1:-}" in
 esac
 
 if ! t has-session -t "=$name" 2>/dev/null; then
-  t new-session -d -s "$name" -c "$root" -e NV_RESTORE=1 nvim
+  t new-session -d -s "$name" -c "$root" nvim
 fi
 # From inside another tmux, attach anyway (it's a separate server).
 TMUX='' exec tmux -L nv -f "$HOME/.config/nvim/tmux.conf" attach -t "=$name"

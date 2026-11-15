@@ -21,7 +21,7 @@ local categories = {
       { key = ";Enter", desc = "Toggle terminal (hide/show)" },
       { key = ";?", desc = "Open this cheatsheet" },
       { key = ";qs", desc = "Save session (files, layout, terminals) and quit" },
-      { key = ";rs", desc = "Resume the saved session for this repo" },
+      { key = ";rs", desc = "Resume the saved session by hand (nvim with no files does it)" },
       { key = "nv  (shell)", desc = "Neovim in tmux per repo; Ctrl-b d detaches, nv resumes" },
     },
   },
